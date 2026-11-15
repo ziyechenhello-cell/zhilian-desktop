@@ -1,0 +1,18 @@
+# Rust / Tauri
+src-tauri/target/
+target/
+Cargo.lock
+
+# Node (if added later)
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 本地私密
+*.pem
+*.pfx
+.env
+.env.*
