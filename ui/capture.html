@@ -49,12 +49,18 @@
     position: absolute; left: 0; right: 0; bottom: 52px; text-align: center;
     color: #F5F1E8; font-size: 12px; text-shadow: 0 1px 3px rgba(0,0,0,.6); pointer-events: none;
   }
+  /* 截图瞬间：只留透明窗口，所有装饰都藏起来，避免把边框拍进去 */
+  body.capturing #frame,
+  body.capturing #bar,
+  body.capturing #shot,
+  body.capturing #grip,
+  body.capturing #msg { visibility: hidden !important; }
 </style>
 </head>
 <body>
   <div id="frame"></div>
   <div id="bar" data-tauri-drag-region>
-    <div class="hint" data-tauri-drag-region>拖动移动 · 右下角缩放 · 按下按钮截取框内画面</div>
+    <div class="hint" data-tauri-drag-region>拖动移动 · 右下角缩放 · 按下按钮截取框内画面并发送</div>
     <div id="close" title="关闭">×</div>
   </div>
   <div id="msg"></div>
@@ -70,6 +76,7 @@
   var core = T.core || {};
   var winApi = T.window || {};
   var msg = document.getElementById("msg");
+  var busy = false;
 
   function say(t) { msg.textContent = t || ""; }
   function cur() { try { return winApi.getCurrentWindow(); } catch (e) { return null; } }
@@ -80,10 +87,24 @@
 
   document.getElementById("shot").addEventListener("click", function () {
     if (!core.invoke) { say("请在桌面客户端里使用"); return; }
-    say("正在截取…");
-    core.invoke("capture_frame").catch(function (e) {
-      say("失败：" + (e && e.message ? e.message : e));
-    });
+    if (busy) return;
+    busy = true;
+    say("");
+
+    // 先把自己藏起来（窗口还在，背景透明），等一帧让桌面刷出来再抓
+    document.body.classList.add("capturing");
+    setTimeout(function () {
+      core.invoke("capture_frame").then(function () {
+        document.body.classList.remove("capturing");
+        busy = false;
+        say("已发送");
+        setTimeout(function () { say(""); }, 1500);
+      }).catch(function (e) {
+        document.body.classList.remove("capturing");
+        busy = false;
+        say("失败：" + (e && e.message ? e.message : e));
+      });
+    }, 260);
   });
 
   var grip = document.getElementById("grip");

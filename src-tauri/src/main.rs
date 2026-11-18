@@ -84,10 +84,8 @@ async fn capture_frame(app: tauri::AppHandle, window: tauri::WebviewWindow) -> R
     let w = (size.width as i32 - INSET * 2).max(16);
     let h = (size.height as i32 - INSET * 2).max(16);
 
-    // 先藏起来，免得把取景框自己的边框拍进去
-    let _ = window.hide();
-    logline("capture_frame: hidden");
-    std::thread::sleep(std::time::Duration::from_millis(200));
+    // 取景框不隐藏：页面那边已经把边框/按钮藏好了（窗口背景透明），直接抓屏即可
+    std::thread::sleep(std::time::Duration::from_millis(80));
 
     let cache = app.path().app_cache_dir().map_err(|e| e.to_string())?;
     std::fs::create_dir_all(&cache).map_err(|e| e.to_string())?;
@@ -146,14 +144,12 @@ async fn capture_frame(app: tauri::AppHandle, window: tauri::WebviewWindow) -> R
     }
 
     if !ok {
-        let _ = window.show();
         return Err("截图失败：抓屏进程未正常结束".into());
     }
 
     let bytes = match std::fs::read(&out) {
         Ok(b) => b,
         Err(e) => {
-            let _ = window.show();
             logline(&format!("capture_frame: read err {}", e));
             return Err(format!("读取截图失败：{}", e));
         }
