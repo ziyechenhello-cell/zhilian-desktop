@@ -68,6 +68,17 @@ async fn open_capture(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// 关掉取景框（隐藏，不销毁；下次点相机还能唤回来）。
+/// 走 Rust 侧，不依赖 webview 的 window.close 权限。
+#[tauri::command]
+async fn close_capture(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(w) = app.get_webview_window("capture") {
+        let _ = w.hide();
+        logline("close_capture: hidden");
+    }
+    Ok(())
+}
+
 /// 抓取取景框内部区域，交给主窗口贴进输入框。
 #[tauri::command]
 async fn capture_frame(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Result<(), String> {
@@ -175,7 +186,11 @@ async fn capture_frame(app: tauri::AppHandle, window: tauri::WebviewWindow) -> R
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![open_capture, capture_frame])
+        .invoke_handler(tauri::generate_handler![
+            open_capture,
+            capture_frame,
+            close_capture
+        ])
         .setup(|app| {
             if let Some(win) = app.get_webview_window("main") {
                 let js = format!("window.__ZL_DESKTOP_VERSION__ = '{}';", VERSION);

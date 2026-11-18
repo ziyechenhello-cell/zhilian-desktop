@@ -81,9 +81,18 @@
   function say(t) { msg.textContent = t || ""; }
   function cur() { try { return winApi.getCurrentWindow(); } catch (e) { return null; } }
 
-  document.getElementById("close").addEventListener("click", function () {
-    var w = cur(); if (w) w.close(); else location.href = "about:blank";
-  });
+  function shut() {
+    // 优先走 Rust 命令（不受 webview 窗口权限限制）；失败再退到 window API
+    if (core.invoke) {
+      core.invoke("close_capture").catch(function () {
+        var w = cur(); if (w) { try { w.hide(); } catch (e) { w.close(); } }
+      });
+      return;
+    }
+    var w = cur(); if (w) { try { w.hide(); } catch (e) { w.close(); } }
+  }
+
+  document.getElementById("close").addEventListener("click", shut);
 
   document.getElementById("shot").addEventListener("click", function () {
     if (!core.invoke) { say("请在桌面客户端里使用"); return; }
@@ -128,9 +137,7 @@
   });
 
   window.addEventListener("keydown", function (e) {
-    if (e.key === "Escape") {
-      var w = cur(); if (w) w.close();
-    }
+    if (e.key === "Escape") shut();
     if (e.key === "Enter") document.getElementById("shot").click();
   });
 })();
