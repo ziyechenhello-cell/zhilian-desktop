@@ -17,6 +17,14 @@ $bmp.Save($Out,[System.Drawing.Imaging.ImageFormat]::Png)
 $bmp.Dispose()
 "#;
 
+fn logline(msg: &str) {
+    use std::io::Write;
+    let p = std::env::temp_dir().join("zl_capture.log");
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(p) {
+        let _ = writeln!(f, "{}", msg);
+    }
+}
+
 fn b64(data: &[u8]) -> String {
     const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::with_capacity((data.len() + 2) / 3 * 4);
@@ -33,9 +41,11 @@ fn b64(data: &[u8]) -> String {
 /// 打开（或唤起）桌面上的矩形取景框。
 #[tauri::command]
 async fn open_capture(app: tauri::AppHandle) -> Result<(), String> {
+    logline("open_capture: enter");
     if let Some(w) = app.get_webview_window("capture") {
         let _ = w.show();
         let _ = w.set_focus();
+        logline("open_capture: re-show");
         return Ok(());
     }
     WebviewWindowBuilder::new(&app, "capture", WebviewUrl::App("capture.html".into()))
@@ -50,15 +60,23 @@ async fn open_capture(app: tauri::AppHandle) -> Result<(), String> {
         .shadow(false)
         .center()
         .build()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| {
+            logline(&format!("open_capture: build err {}", e));
+            e.to_string()
+        })?;
+    logline("open_capture: built");
     Ok(())
 }
 
 /// 抓取取景框内部区域，交给主窗口贴进输入框。
 #[tauri::command]
 async fn capture_frame(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Result<(), String> {
+    logline("capture_frame: enter");
+
     let pos = window.outer_position().map_err(|e| e.to_string())?;
+    logline(&format!("capture_frame: pos {},{}", pos.x, pos.y));
     let size = window.outer_size().map_err(|e| e.to_string())?;
+    logline(&format!("capture_frame: size {}x{}", size.width, size.height));
 
     const INSET: i32 = 4;
     let x = pos.x + INSET;
@@ -68,7 +86,8 @@ async fn capture_frame(app: tauri::AppHandle, window: tauri::WebviewWindow) -> R
 
     // 先藏起来，免得把取景框自己的边框拍进去
     let _ = window.hide();
-    std::thread::sleep(std::time::Duration::from_millis(180));
+    logline("capture_frame: hidden");
+    std::thread::sleep(std::time::Duration::from_millis(200));
 
     let cache = app.path().app_cache_dir().map_err(|e| e.to_string())?;
     std::fs::create_dir_all(&cache).map_err(|e| e.to_string())?;
@@ -81,20 +100,65 @@ async fn capture_frame(app: tauri::AppHandle, window: tauri::WebviewWindow) -> R
         .unwrap_or(0);
     let out = std::env::temp_dir().join(format!("zl_shot_{}.png", stamp));
 
-    let status = std::process::Command::new("powershell")
-        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File"])
+    let mut cmd = std::process::Command::new("powershell");
+    cmd.args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"])
         .arg(&script)
         .args(["-X", &x.to_string(), "-Y", &y.to_string(), "-W", &w.to_string(), "-H", &h.to_string(), "-Out"])
         .arg(&out)
-        .status()
-        .map_err(|e| e.to_string())?;
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
 
-    if !status.success() {
-        let _ = window.show();
-        return Err(format!("截图失败（退出码 {:?}）", status.code()));
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
     }
 
-    let bytes = std::fs::read(&out).map_err(|e| e.to_string())?;
+    let mut child = cmd.spawn().map_err(|e| {
+        logline(&format!("capture_frame: spawn err {}", e));
+        e.to_string()
+    })?;
+    logline(&format!("capture_frame: spawned pid {}", child.id()));
+
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let mut ok = false;
+    loop {
+        match child.try_wait() {
+            Ok(Some(st)) => {
+                ok = st.success();
+                logline(&format!("capture_frame: exit {:?}", st.code()));
+                break;
+            }
+            Ok(None) => {
+                if std::time::Instant::now() > deadline {
+                    let _ = child.kill();
+                    logline("capture_frame: timeout");
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(60));
+            }
+            Err(e) => {
+                logline(&format!("capture_frame: wait err {}", e));
+                break;
+            }
+        }
+    }
+
+    if !ok {
+        let _ = window.show();
+        return Err("截图失败：抓屏进程未正常结束".into());
+    }
+
+    let bytes = match std::fs::read(&out) {
+        Ok(b) => b,
+        Err(e) => {
+            let _ = window.show();
+            logline(&format!("capture_frame: read err {}", e));
+            return Err(format!("读取截图失败：{}", e));
+        }
+    };
+    logline(&format!("capture_frame: png {} bytes", bytes.len()));
     let _ = std::fs::remove_file(&out);
 
     if let Some(main) = app.get_webview_window("main") {
@@ -105,7 +169,10 @@ async fn capture_frame(app: tauri::AppHandle, window: tauri::WebviewWindow) -> R
             "width": w,
             "height": h
         });
-        main.emit("zl-shot", payload).map_err(|e| e.to_string())?;
+        match main.emit("zl-shot", payload) {
+            Ok(_) => logline("capture_frame: emitted"),
+            Err(e) => logline(&format!("capture_frame: emit err {}", e)),
+        }
     }
     Ok(())
 }
