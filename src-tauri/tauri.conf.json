@@ -1,13 +1,13 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "智恋bot",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "identifier": "com.zhilianbot.app",
   "build": {
     "frontendDist": "../ui"
   },
   "app": {
-    "withGlobalTauri": false,
+    "withGlobalTauri": true,
     "windows": [
       {
         "title": "智恋bot",

@@ -1,0 +1,12 @@
+{
+  "identifier": "remote-site",
+  "description": "允许 zhilianbot.com 页面调用截图相关命令",
+  "windows": ["main"],
+  "remote": {
+    "urls": ["https://zhilianbot.com", "https://zhilianbot.com/**"]
+  },
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging"
+  ]
+}

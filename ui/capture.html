@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>智恋bot 截图</title>
+<style>
+  html, body {
+    margin: 0; height: 100%; background: transparent; overflow: hidden;
+    font: 13px/1.5 "Microsoft YaHei", "PingFang SC", sans-serif;
+    user-select: none; cursor: default;
+  }
+  #frame {
+    position: absolute; inset: 0; box-sizing: border-box;
+    border: 2px dashed rgba(201, 162, 39, .95);
+    border-radius: 10px;
+    background: rgba(201, 162, 39, .04);
+  }
+  #bar {
+    position: absolute; left: 2px; right: 2px; top: 2px; height: 30px;
+    display: flex; align-items: center; gap: 8px; padding: 0 10px;
+    box-sizing: border-box; border-radius: 8px 8px 0 0;
+    background: rgba(43, 43, 43, .82); color: #F5F1E8;
+    font-size: 12px; letter-spacing: .2px; cursor: move;
+  }
+  #bar .hint { flex: 1 1 auto; opacity: .78; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #close {
+    flex: 0 0 auto; width: 20px; height: 20px; line-height: 19px; text-align: center;
+    border-radius: 6px; background: rgba(255,255,255,.14); cursor: pointer; font-size: 13px;
+  }
+  #close:hover { background: rgba(255,255,255,.28); }
+  #shot {
+    position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 6px;
+    padding: 7px 16px; border-radius: 999px; border: none;
+    background: #2b2b2b; color: #F5F1E8; font-size: 13px;
+    box-shadow: 0 4px 14px rgba(0,0,0,.28); cursor: pointer;
+  }
+  #shot:hover { background: #3a3a3a; }
+  #shot:active { transform: translateX(-50%) scale(.97); }
+  #shot svg { width: 14px; height: 14px; }
+  #grip {
+    position: absolute; right: 2px; bottom: 2px; width: 18px; height: 18px;
+    cursor: nwse-resize; border-radius: 0 0 8px 0;
+    background:
+      linear-gradient(135deg, transparent 0 46%, rgba(201,162,39,.9) 46% 54%, transparent 54% 62%,
+      rgba(201,162,39,.9) 62% 70%, transparent 70%) ;
+  }
+  #msg {
+    position: absolute; left: 0; right: 0; bottom: 52px; text-align: center;
+    color: #F5F1E8; font-size: 12px; text-shadow: 0 1px 3px rgba(0,0,0,.6); pointer-events: none;
+  }
+</style>
+</head>
+<body>
+  <div id="frame"></div>
+  <div id="bar" data-tauri-drag-region>
+    <div class="hint" data-tauri-drag-region>拖动移动 · 右下角缩放 · 按下按钮截取框内画面</div>
+    <div id="close" title="关闭">×</div>
+  </div>
+  <div id="msg"></div>
+  <button id="shot">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+    截取并发送
+  </button>
+  <div id="grip"></div>
+
+<script>
+(function () {
+  var T = window.__TAURI__ || {};
+  var core = T.core || {};
+  var winApi = T.window || {};
+  var msg = document.getElementById("msg");
+
+  function say(t) { msg.textContent = t || ""; }
+  function cur() { try { return winApi.getCurrentWindow(); } catch (e) { return null; } }
+
+  document.getElementById("close").addEventListener("click", function () {
+    var w = cur(); if (w) w.close(); else location.href = "about:blank";
+  });
+
+  document.getElementById("shot").addEventListener("click", function () {
+    if (!core.invoke) { say("请在桌面客户端里使用"); return; }
+    say("正在截取…");
+    core.invoke("capture_frame").catch(function (e) {
+      say("失败：" + (e && e.message ? e.message : e));
+    });
+  });
+
+  var grip = document.getElementById("grip");
+  grip.addEventListener("pointerdown", function (e) {
+    e.preventDefault();
+    var w = cur(); if (!w) return;
+    var sx = e.screenX, sy = e.screenY, base = null;
+    w.innerSize().then(function (s) { base = s; }).catch(function () {});
+    function move(ev) {
+      if (!base) return;
+      var nw = Math.max(160, Math.round(base.width + (ev.screenX - sx)));
+      var nh = Math.max(110, Math.round(base.height + (ev.screenY - sy)));
+      w.setSize({ type: "Physical", width: nw, height: nh }).catch(function () {});
+    }
+    function up() {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    }
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  });
+
+  window.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") {
+      var w = cur(); if (w) w.close();
+    }
+    if (e.key === "Enter") document.getElementById("shot").click();
+  });
+})();
+</script>
+</body>
+</html>
