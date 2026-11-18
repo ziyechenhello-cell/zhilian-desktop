@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "鏅烘亱bot",
+  "productName": "智恋bot",
   "version": "1.0.5",
   "identifier": "com.zhilianbot.app",
   "build": {
@@ -10,7 +10,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "鏅烘亱bot",
+        "title": "智恋bot",
         "width": 1200,
         "height": 820,
         "minWidth": 980,
