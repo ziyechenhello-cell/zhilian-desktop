@@ -1,0 +1,9 @@
+[[permission]]
+identifier = "allow-open-capture"
+description = "允许打开桌面取景框"
+commands.allow = ["open_capture"]
+
+[[permission]]
+identifier = "allow-capture-frame"
+description = "允许截取取景框内画面"
+commands.allow = ["capture_frame"]

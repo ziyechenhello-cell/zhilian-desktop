@@ -1,7 +1,7 @@
 [package]
 name = "zhilian-desktop"
-version = "1.0.4"
-description = "智恋bot 桌面客户端"
+version = "1.0.5"
+description = "鏅烘亱bot 妗岄潰瀹㈡埛绔?
 authors = ["zhilianbot"]
 edition = "2021"
 
